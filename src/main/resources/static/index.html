@@ -82,7 +82,7 @@
       <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6z"/></svg>
       Ask AI
     </button>
-    <div class="side-foot">Spring Boot &middot; Spring AI</div>
+    <div class="side-foot" id="side-foot">Spring Boot &middot; Spring AI</div>
   </aside>
 
   <main class="main">
@@ -156,26 +156,76 @@ const cat = c => CATS[c] || CATS.OTHER;
 const inr = n => "₹" + Number(n).toLocaleString("en-IN");
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
+// ---- built-in demo data (used only when the backend is unreachable) ----
+const DEMO_EXPENSES = [
+  { merchant: "Barbeque Nation", amount: 2400, category: "FOOD_DINING",   spentOn: "2026-07-02", rawText: "dinner at Barbeque Nation 2400" },
+  { merchant: "IndiGo",          amount: 3400, category: "TRAVEL",        spentOn: "2026-07-01", rawText: "flight to Delhi 3400" },
+  { merchant: "BigBasket",       amount: 2310, category: "GROCERIES",     spentOn: "2026-07-03", rawText: "weekly groceries 2310" },
+  { merchant: "Amazon",          amount: 1899, category: "SHOPPING",      spentOn: "2026-07-02", rawText: "new headphones 1899" },
+  { merchant: "BESCOM",          amount: 1450, category: "UTILITIES",     spentOn: "2026-07-04", rawText: "electricity bill 1450" },
+  { merchant: "Uber",            amount: 620,  category: "TRAVEL",        spentOn: "2026-07-03", rawText: "cab to airport 620" },
+  { merchant: "Netflix",         amount: 649,  category: "SUBSCRIPTIONS", spentOn: "2026-07-01", rawText: "netflix monthly subscription 649" },
+  { merchant: "Apollo Pharmacy", amount: 540,  category: "HEALTH",        spentOn: "2026-06-29", rawText: "pharmacy 540" },
+  { merchant: "Spotify",         amount: 119,  category: "SUBSCRIPTIONS", spentOn: "2026-07-01", rawText: "spotify subscription 119" }
+];
+const DEMO_INSIGHTS = {
+  summary: "You've spent ₹13,387 this month across 9 transactions. Travel is your largest category at ₹4,020, driven mostly by a flight booking. Recurring subscriptions total ₹768.",
+  highlights: ["Travel makes up ~30% of spending", "3 active subscriptions (₹768/mo)", "Dining and shopping are your next-largest categories"]
+};
+let demoMode = false;
+function goDemo() {
+  if (demoMode) return;
+  demoMode = true;
+  document.getElementById("side-foot").textContent = "Demo data · backend offline";
+}
+
+// Build a summary object (same shape as the API) from a list of expenses.
+function computeSummary(expenses) {
+  const totals = {};
+  let total = 0;
+  expenses.forEach(e => { totals[e.category] = (totals[e.category] || 0) + Number(e.amount); total += Number(e.amount); });
+  const byCategory = Object.entries(totals)
+    .map(([category, t]) => ({ category, total: t, pct: total ? Math.round(t / total * 100) : 0 }))
+    .sort((a, b) => b.total - a.total);
+  return { month: currentMonth(), total, byCategory, transactionCount: expenses.length };
+}
+
+// ---- navigation ----
 document.querySelectorAll(".nav").forEach(n => n.addEventListener("click", () => {
   document.querySelectorAll(".nav").forEach(x => x.classList.toggle("active", x === n));
   document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === "s-" + n.dataset.screen));
   if (n.dataset.screen === "dashboard") loadDashboard();
 }));
 
-async function loadExpenses() {
+// ---- expenses ----
+function renderExpenses(data) {
   const list = document.getElementById("exp-list");
+  if (!data.length) { list.innerHTML = '<div class="empty">No expenses yet. Add one above.</div>'; return; }
+  list.innerHTML = data.map(e => {
+    const c = cat(e.category);
+    return `<div class="card exp-row">
+      <div class="exp-left"><div class="m">${escapeHtml(e.merchant || "—")}</div>
+        <div class="sub">${e.spentOn} · "${escapeHtml(e.rawText || "")}"</div></div>
+      <div class="exp-right"><span class="badge" style="${badgeStyle[c.badge]}">${c.label}</span>
+        <span class="amt">${inr(e.amount)}</span></div></div>`;
+  }).join("");
+}
+async function loadExpenses() {
   try {
     const data = await (await fetch(API + "/api/expenses")).json();
-    if (!data.length) { list.innerHTML = '<div class="empty">No expenses yet. Add one above.</div>'; return; }
-    list.innerHTML = data.map(e => {
-      const c = cat(e.category);
-      return `<div class="card exp-row">
-        <div class="exp-left"><div class="m">${escapeHtml(e.merchant || "—")}</div>
-          <div class="sub">${e.spentOn} · "${escapeHtml(e.rawText || "")}"</div></div>
-        <div class="exp-right"><span class="badge" style="${badgeStyle[c.badge]}">${c.label}</span>
-          <span class="amt">${inr(e.amount)}</span></div></div>`;
-    }).join("");
-  } catch (err) { list.innerHTML = '<div class="empty">Could not load expenses. Is the backend running?</div>'; }
+    renderExpenses(data);
+  } catch (err) { goDemo(); renderExpenses(DEMO_EXPENSES); }
+}
+function localCategorize(t) {
+  t = t.toLowerCase();
+  if (/lunch|dinner|breakfast|food|restaurant|cafe|coffee|pizza|swiggy|zomato|barbeque/.test(t)) return "FOOD_DINING";
+  if (/uber|ola|cab|taxi|flight|train|fuel|petrol|travel|airport/.test(t)) return "TRAVEL";
+  if (/netflix|spotify|subscription|prime|gym/.test(t)) return "SUBSCRIPTIONS";
+  if (/grocer|bigbasket|supermarket|vegetables|milk/.test(t)) return "GROCERIES";
+  if (/pharmacy|medicine|doctor|hospital|apollo/.test(t)) return "HEALTH";
+  if (/bill|electricity|water|recharge/.test(t)) return "UTILITIES";
+  if (/amazon|flipkart|shop|headphones|clothes/.test(t)) return "SHOPPING";
+  return "OTHER";
 }
 async function addExpense() {
   const input = document.getElementById("exp-input");
@@ -192,36 +242,53 @@ async function addExpense() {
     const saved = await res.json();
     hint.textContent = `Added: ${saved.merchant || "expense"} · ${cat(saved.category).label} · ${inr(saved.amount)}`;
     input.value = ""; loadExpenses();
-  } catch (err) { hint.textContent = "Could not add: " + err.message; }
-  finally { btn.disabled = false; }
+  } catch (err) {
+    // backend offline -> parse locally so the demo stays interactive
+    goDemo();
+    const amtMatch = text.replace(/,/g, "").match(/(\d+(\.\d+)?)/);
+    const amount = amtMatch ? Math.round(parseFloat(amtMatch[1])) : 0;
+    const atMatch = text.match(/at\s+([A-Za-z][A-Za-z &]+?)(?:\s*\d|,|$)/i);
+    const merchant = atMatch ? atMatch[1].trim() : (text.split(/\s+/)[0] || "Expense");
+    const category = localCategorize(text);
+    DEMO_EXPENSES.unshift({ merchant, amount, category, spentOn: currentMonth() + "-05", rawText: text });
+    renderExpenses(DEMO_EXPENSES);
+    hint.textContent = `Added (demo): ${merchant} · ${cat(category).label} · ${inr(amount)}`;
+    input.value = "";
+  } finally { btn.disabled = false; }
 }
 document.getElementById("exp-add").addEventListener("click", addExpense);
 document.getElementById("exp-input").addEventListener("keydown", e => { if (e.key === "Enter") addExpense(); });
 
+// ---- dashboard ----
+function renderDashboard(s) {
+  document.getElementById("dash-metrics").innerHTML = `
+    <div class="metric"><div class="l">This month</div><div class="v">${inr(s.total)}</div></div>
+    <div class="metric"><div class="l">Transactions</div><div class="v">${s.transactionCount}</div></div>
+    <div class="metric"><div class="l">Top category</div><div class="v" style="font-size:16px">${s.byCategory[0] ? cat(s.byCategory[0].category).label : "—"}</div></div>`;
+  renderDonut(s.byCategory);
+  document.getElementById("dash-legend").innerHTML = s.byCategory.length
+    ? s.byCategory.map(b => { const c = cat(b.category);
+        return `<div class="li"><span class="swatch" style="background:${c.color}"></span>${c.label}
+          <span class="amt2">${inr(b.total)} · ${b.pct}%</span></div>`; }).join("")
+    : '<div class="empty">No spending this month.</div>';
+}
+function renderInsights(i) {
+  document.getElementById("ins-summary").textContent = i.summary || "";
+  document.getElementById("ins-highlights").innerHTML = (i.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join("");
+  document.getElementById("dash-insights").style.display = "block";
+}
 async function loadDashboard() {
   const month = currentMonth();
   try {
     const s = await (await fetch(API + "/api/expenses/summary?month=" + month)).json();
-    document.getElementById("dash-metrics").innerHTML = `
-      <div class="metric"><div class="l">This month</div><div class="v">${inr(s.total)}</div></div>
-      <div class="metric"><div class="l">Transactions</div><div class="v">${s.transactionCount}</div></div>
-      <div class="metric"><div class="l">Top category</div><div class="v" style="font-size:16px">${s.byCategory[0] ? cat(s.byCategory[0].category).label : "—"}</div></div>`;
-    renderDonut(s.byCategory);
-    document.getElementById("dash-legend").innerHTML = s.byCategory.length
-      ? s.byCategory.map(b => { const c = cat(b.category);
-          return `<div class="li"><span class="swatch" style="background:${c.color}"></span>${c.label}
-            <span class="amt2">${inr(b.total)} · ${b.pct}%</span></div>`; }).join("")
-      : '<div class="empty">No spending this month.</div>';
-  } catch (err) { document.getElementById("dash-metrics").innerHTML = '<div class="empty">Could not load dashboard.</div>'; }
-
-  const ins = document.getElementById("dash-insights");
+    renderDashboard(s);
+  } catch (err) { goDemo(); renderDashboard(computeSummary(DEMO_EXPENSES)); }
   try {
     const i = await (await fetch(API + "/api/insights?month=" + month)).json();
-    document.getElementById("ins-summary").textContent = i.summary || "";
-    document.getElementById("ins-highlights").innerHTML = (i.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join("");
-    ins.style.display = "block";
-  } catch (err) { ins.style.display = "none"; }
+    renderInsights(i);
+  } catch (err) { goDemo(); renderInsights(DEMO_INSIGHTS); }
 }
+
 function renderDonut(items) {
   const svg = document.getElementById("donut");
   let out = '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#e7e4db" stroke-width="4"/>';
@@ -235,24 +302,34 @@ function renderDonut(items) {
   svg.innerHTML = out;
 }
 
+// ---- chat ----
 const log = document.getElementById("chat-log");
 function bubble(cls, html) { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
 bubble("bubble-a", SPARK + "<span>Ask me anything about your spending — I query your live data to answer.</span>");
+function demoAnswer(q) {
+  q = q.toLowerCase();
+  if (/food|dining|eat/.test(q)) return { answer: "You spent ₹2,400 on Food & Dining this month.", toolsUsed: ["getSpendingByCategory"] };
+  if (/biggest|largest|most/.test(q)) return { answer: "Your largest category is Travel at ₹4,020 — mostly a ₹3,400 flight booking.", toolsUsed: ["getMonthlyBreakdown", "getLargestExpense"] };
+  if (/subscription|recurring/.test(q)) return { answer: "You have 3 subscriptions: Netflix ₹649 and Spotify ₹119 (₹768/mo total).", toolsUsed: ["getSubscriptions"] };
+  if (/save|reduce|cut/.test(q)) return { answer: "Travel and shopping are your biggest discretionary categories — trimming those would save the most.", toolsUsed: ["getMonthlyBreakdown"] };
+  return { answer: "This month you've spent ₹13,387 across 9 transactions. Travel and dining lead.", toolsUsed: ["getMonthlyBreakdown"] };
+}
 async function sendChat(text) {
   text = (text || "").trim(); if (!text) return;
   bubble("bubble-u", escapeHtml(text));
   document.getElementById("chat-input").value = "";
   const thinking = bubble("bubble-a", SPARK + "<span>Thinking…</span>");
+  let data;
   try {
     const res = await fetch(API + "/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text })
     });
-    const data = await res.json();
-    let inner = "<span>" + escapeHtml(data.answer || "");
-    if (data.toolsUsed && data.toolsUsed.length) inner += `<div class="tools">tools used: ${data.toolsUsed.join(", ")}</div>`;
-    inner += "</span>";
-    thinking.innerHTML = SPARK + inner;
-  } catch (err) { thinking.innerHTML = SPARK + "<span>Couldn't reach the assistant.</span>"; }
+    data = await res.json();
+  } catch (err) { goDemo(); data = demoAnswer(text); }
+  let inner = "<span>" + escapeHtml(data.answer || "");
+  if (data.toolsUsed && data.toolsUsed.length) inner += `<div class="tools">tools used: ${data.toolsUsed.join(", ")}</div>`;
+  inner += "</span>";
+  thinking.innerHTML = SPARK + inner;
 }
 document.getElementById("chat-send").addEventListener("click", () => sendChat(document.getElementById("chat-input").value));
 document.getElementById("chat-input").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(e.target.value); });
