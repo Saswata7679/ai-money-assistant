@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Money Assistant</title>
+<style>
+  :root {
+    --bg: #f7f7f4; --surface: #ffffff; --border: #e6e4dd; --muted: #6b6a64;
+    --text: #23221f; --accent: #185fa5; --accent-bg: #e6f1fb;
+    --warn-bg: #faeeda; --warn-tx: #85500b; --ok-bg: #e1f5ee; --ok-tx: #0f6e56;
+    --danger-bg: #fceceb; --danger-tx: #a32d2d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 210px; flex-shrink: 0; background: #efeee8; border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; padding: 4px 8px 18px; }
+  .nav { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 8px; color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 3px; border: none; background: none; width: 100%; text-align: left; }
+  .nav.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .nav:hover:not(.active) { background: #e7e6df; }
+  .main { flex: 1; padding: 26px 34px; max-width: 900px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 18px; }
+  .screen { display: none; } .screen.active { display: block; }
+  .row-input { display: flex; gap: 8px; margin-bottom: 6px; }
+  input[type=text] { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  button.primary { padding: 9px 16px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-size: 14px; cursor: pointer; font-weight: 500; }
+  button.primary:disabled { opacity: .55; cursor: default; }
+  .hint { font-size: 12px; color: var(--muted); margin-bottom: 18px; min-height: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 15px; margin-bottom: 10px; }
+  .exp-row { display: flex; align-items: center; justify-content: space-between; }
+  .exp-left .m { font-weight: 600; font-size: 14px; }
+  .exp-left .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .exp-right { display: flex; align-items: center; gap: 12px; }
+  .amt { font-weight: 600; font-size: 14px; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 8px; white-space: nowrap; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+  .metric { background: #efeee8; border-radius: 8px; padding: 14px; }
+  .metric .l { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .metric .v { font-size: 20px; font-weight: 600; }
+  .dash-cols { display: grid; grid-template-columns: 150px 1fr; gap: 20px; align-items: center; }
+  .legend { display: flex; flex-direction: column; gap: 8px; }
+  .legend .li { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .legend .amt2 { margin-left: auto; color: var(--muted); }
+  .ai-card { background: var(--accent-bg); border-radius: 12px; padding: 14px 16px; margin-top: 18px; }
+  .ai-card .h { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+  .ai-card p { margin: 0; font-size: 13px; line-height: 1.55; }
+  .ai-card ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+  .chat-log { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; min-height: 260px; }
+  .bubble-u { align-self: flex-end; background: var(--accent-bg); color: var(--accent); padding: 9px 13px; border-radius: 12px; font-size: 14px; max-width: 78%; }
+  .bubble-a { align-self: flex-start; background: #efeee8; padding: 9px 13px; border-radius: 12px; font-size: 14px; max-width: 85%; line-height: 1.5; }
+  .tools { font-size: 11px; color: var(--muted); margin-top: 5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip { font-size: 12px; padding: 6px 11px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--muted); background: var(--surface); }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px 0; }
+  .disclaimer { font-size: 11px; color: var(--muted); margin-top: 22px; border-top: 1px solid var(--border); padding-top: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">💰 Money Assistant</div>
+    <button class="nav active" data-screen="expenses">📝 Expenses</button>
+    <button class="nav" data-screen="dashboard">📊 Dashboard</button>
+    <button class="nav" data-screen="chat">✨ Ask AI</button>
+    <div style="margin-top:auto; font-size:11px; color:var(--muted); padding:8px;">Spring Boot + Spring AI</div>
+  </aside>
+
+  <main class="main">
+    <!-- Expenses -->
+    <section class="screen active" id="s-expenses">
+      <h1>Expenses</h1>
+      <div class="row-input">
+        <input type="text" id="exp-input" placeholder='Try: "dinner at Barbeque Nation 2400"' />
+        <button class="primary" id="exp-add">Add</button>
+      </div>
+      <div class="hint" id="exp-hint">Type naturally — the AI extracts amount, merchant and category.</div>
+      <div id="exp-list"><div class="empty">Loading…</div></div>
+    </section>
+
+    <!-- Dashboard -->
+    <section class="screen" id="s-dashboard">
+      <h1>Dashboard</h1>
+      <div class="metrics" id="dash-metrics"></div>
+      <div class="card">
+        <div class="dash-cols">
+          <svg id="donut" viewBox="0 0 36 36" width="150" height="150" role="img" aria-label="Spending by category"></svg>
+          <div class="legend" id="dash-legend"></div>
+        </div>
+      </div>
+      <div class="ai-card" id="dash-insights" style="display:none;">
+        <div class="h">✨ AI insights</div>
+        <p id="ins-summary"></p>
+        <ul id="ins-highlights"></ul>
+      </div>
+    </section>
+
+    <!-- Ask AI -->
+    <section class="screen" id="s-chat">
+      <h1>Ask AI</h1>
+      <div class="chat-log" id="chat-log">
+        <div class="bubble-a">✨ Ask me anything about your spending — I query your live data to answer.</div>
+      </div>
+      <div class="chips">
+        <span class="chip" data-q="How much did I spend on food this month?">Food this month?</span>
+        <span class="chip" data-q="What's my biggest expense this month?">Biggest expense?</span>
+        <span class="chip" data-q="What subscriptions do I have?">Subscriptions?</span>
+      </div>
+      <div class="row-input">
+        <input type="text" id="chat-input" placeholder="Ask about your spending…" />
+        <button class="primary" id="chat-send">Send</button>
+      </div>
+      <div class="disclaimer">Answers are generated by an LLM using your live expense data via function calling.</div>
+    </section>
+  </main>
+</div>
+
+<script>
+const API = "";
+const CATS = {
+  FOOD_DINING:   { label: "Food & Dining", color: "#EF9F27", badge: "warn" },
+  GROCERIES:     { label: "Groceries",     color: "#1D9E75", badge: "ok" },
+  TRAVEL:        { label: "Travel",        color: "#378ADD", badge: "info" },
+  SUBSCRIPTIONS: { label: "Subscriptions", color: "#888780", badge: "muted" },
+  SHOPPING:      { label: "Shopping",      color: "#D4537E", badge: "muted" },
+  UTILITIES:     { label: "Utilities",     color: "#7F77DD", badge: "muted" },
+  HEALTH:        { label: "Health",        color: "#E24B4A", badge: "danger" },
+  OTHER:         { label: "Other",         color: "#B4B2A9", badge: "muted" }
+};
+const badgeStyle = {
+  warn:   "background:var(--warn-bg);color:var(--warn-tx)",
+  ok:     "background:var(--ok-bg);color:var(--ok-tx)",
+  info:   "background:var(--accent-bg);color:var(--accent)",
+  danger: "background:var(--danger-bg);color:var(--danger-tx)",
+  muted:  "background:#e7e6df;color:var(--muted)"
+};
+const cat = c => CATS[c] || CATS.OTHER;
+const inr = n => "₹" + Number(n).toLocaleString("en-IN");
+const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+// ---- navigation ----
+document.querySelectorAll(".nav").forEach(n => n.addEventListener("click", () => {
+  document.querySelectorAll(".nav").forEach(x => x.classList.toggle("active", x === n));
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("active", s.id === "s-" + n.dataset.screen));
+  if (n.dataset.screen === "dashboard") loadDashboard();
+}));
+
+// ---- expenses ----
+async function loadExpenses() {
+  const list = document.getElementById("exp-list");
+  try {
+    const res = await fetch(API + "/api/expenses");
+    const data = await res.json();
+    if (!data.length) { list.innerHTML = '<div class="empty">No expenses yet. Add one above.</div>'; return; }
+    list.innerHTML = data.map(e => {
+      const c = cat(e.category);
+      return `<div class="card exp-row">
+        <div class="exp-left"><div class="m">${escapeHtml(e.merchant || "—")}</div>
+          <div class="sub">${e.spentOn} · "${escapeHtml(e.rawText || "")}"</div></div>
+        <div class="exp-right"><span class="badge" style="${badgeStyle[c.badge]}">${c.label}</span>
+          <span class="amt">${inr(e.amount)}</span></div></div>`;
+    }).join("");
+  } catch (err) { list.innerHTML = '<div class="empty">Could not load expenses. Is the backend running?</div>'; }
+}
+async function addExpense() {
+  const input = document.getElementById("exp-input");
+  const btn = document.getElementById("exp-add");
+  const hint = document.getElementById("exp-hint");
+  const text = input.value.trim();
+  if (!text) return;
+  btn.disabled = true; hint.textContent = "⏳ AI extracting amount, merchant and category…";
+  try {
+    const res = await fetch(API + "/api/expenses", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text })
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || res.status); }
+    const saved = await res.json();
+    hint.textContent = `✓ Added: ${saved.merchant || "expense"} · ${cat(saved.category).label} · ${inr(saved.amount)}`;
+    input.value = ""; loadExpenses();
+  } catch (err) { hint.textContent = "⚠ Could not add: " + err.message; }
+  finally { btn.disabled = false; }
+}
+document.getElementById("exp-add").addEventListener("click", addExpense);
+document.getElementById("exp-input").addEventListener("keydown", e => { if (e.key === "Enter") addExpense(); });
+
+// ---- dashboard ----
+async function loadDashboard() {
+  const month = currentMonth();
+  try {
+    const s = await (await fetch(API + "/api/expenses/summary?month=" + month)).json();
+    document.getElementById("dash-metrics").innerHTML = `
+      <div class="metric"><div class="l">This month</div><div class="v">${inr(s.total)}</div></div>
+      <div class="metric"><div class="l">Transactions</div><div class="v">${s.transactionCount}</div></div>
+      <div class="metric"><div class="l">Top category</div><div class="v" style="font-size:16px">${s.byCategory[0] ? cat(s.byCategory[0].category).label : "—"}</div></div>`;
+    renderDonut(s.byCategory);
+    document.getElementById("dash-legend").innerHTML = s.byCategory.length
+      ? s.byCategory.map(b => { const c = cat(b.category);
+          return `<div class="li"><span class="swatch" style="background:${c.color}"></span>${c.label}
+            <span class="amt2">${inr(b.total)} · ${b.pct}%</span></div>`; }).join("")
+      : '<div class="empty">No spending this month.</div>';
+  } catch (err) { document.getElementById("dash-metrics").innerHTML = '<div class="empty">Could not load dashboard.</div>'; }
+
+  const ins = document.getElementById("dash-insights");
+  try {
+    const i = await (await fetch(API + "/api/insights?month=" + month)).json();
+    document.getElementById("ins-summary").textContent = i.summary || "";
+    document.getElementById("ins-highlights").innerHTML = (i.highlights || []).map(h => `<li>${escapeHtml(h)}</li>`).join("");
+    ins.style.display = "block";
+  } catch (err) { ins.style.display = "none"; }
+}
+function renderDonut(items) {
+  const svg = document.getElementById("donut");
+  const bg = '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#e6e4dd" stroke-width="4"/>';
+  let offset = 0;
+  const arcs = items.map(b => {
+    const c = cat(b.category), pct = b.pct;
+    const seg = `<circle cx="18" cy="18" r="15.9" fill="none" stroke="${c.color}" stroke-width="4"
+      stroke-dasharray="${pct} ${100 - pct}" stroke-dashoffset="${-offset}" transform="rotate(-90 18 18)"/>`;
+    offset += pct; return seg;
+  }).join("");
+  svg.innerHTML = bg + arcs;
+}
+
+// ---- chat ----
+const log = document.getElementById("chat-log");
+function bubble(cls, html) { const d = document.createElement("div"); d.className = cls; d.innerHTML = html; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; }
+async function sendChat(text) {
+  text = (text || "").trim(); if (!text) return;
+  bubble("bubble-u", escapeHtml(text));
+  document.getElementById("chat-input").value = "";
+  const thinking = bubble("bubble-a", "✨ Thinking…");
+  try {
+    const res = await fetch(API + "/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text })
+    });
+    const data = await res.json();
+    let html = "✨ " + escapeHtml(data.answer || "");
+    if (data.toolsUsed && data.toolsUsed.length) html += `<div class="tools">tools used: ${data.toolsUsed.join(", ")}</div>`;
+    thinking.innerHTML = html;
+  } catch (err) { thinking.innerHTML = "⚠ Couldn't reach the assistant."; }
+}
+document.getElementById("chat-send").addEventListener("click", () => sendChat(document.getElementById("chat-input").value));
+document.getElementById("chat-input").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(e.target.value); });
+document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => sendChat(c.dataset.q)));
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m])); }
+
+loadExpenses();
+</script>
+</body>
+</html>

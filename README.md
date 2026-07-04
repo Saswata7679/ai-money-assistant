@@ -6,7 +6,9 @@ A Spring Boot service that uses an LLM (via Spring AI) to make personal-finance 
 2. **Chat** — answer natural-language questions about your spending by letting the LLM call read-only backend query methods (Spring AI *function calling*).
 3. **Insights** — a short, cached monthly spending review.
 
-> This is the backend/API stage. An Angular frontend is planned on top of these endpoints.
+> Ships with a lightweight single-page frontend (vanilla JS, no build step) served at
+> `http://localhost:8080/` — an Expenses view, a Dashboard with a spending donut + AI
+> insights, and an Ask-AI chat. A richer Angular rebuild is a possible future step.
 
 ## Tech stack
 
@@ -45,7 +47,9 @@ mvn spring-boot:run
 ```
 
 On first start, Flyway creates the schema and a handful of demo expenses are seeded
-(so the chat has data to query). Then open **http://localhost:8080/swagger-ui.html**.
+(so the chat has data to query). Then open:
+- **http://localhost:8080/** — the web UI (Expenses, Dashboard, Ask AI)
+- **http://localhost:8080/swagger-ui.html** — interactive API docs
 
 ## Endpoints
 
