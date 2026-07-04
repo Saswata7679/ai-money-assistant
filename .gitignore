@@ -1,0 +1,25 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Office temp/lock files
+~$*
+
+# Secrets / local env
+*.env
+.env
+application-local.yml
+application-local.properties
